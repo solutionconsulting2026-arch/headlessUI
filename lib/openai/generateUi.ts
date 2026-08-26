@@ -23,8 +23,24 @@ Rules:
   style near the top, then supporting details below — this is a quick-glance card, not a dense
   report. Prefer a short table only when DATA is a list of several uniform rows; otherwise use a
   key/value layout or small stat tiles.
+- Real API responses are often wrapped in an envelope instead of being the payload itself. Before
+  deciding DATA is empty or an error, actively look for and unwrap nesting like
+  DATA.result / DATA.data / DATA.results / DATA.records / DATA.account (a container matching the
+  entity name) — including one that is itself an array, e.g. DATA.result[0]. Only treat the
+  response as empty/error when, after unwrapping, there is truly no record, OR an explicit failure
+  flag says so (isSuccess === false, success === false, ok === false, ok === false, a non-2xx
+  "status"/"statusCode", or a populated "error"/"message" describing a failure). A field literally
+  named "message" that is null is NOT an error — ignore it. Never show the empty/error fallback
+  just because the shape is nested or unfamiliar — dig into it first.
+- Field names from real backends are often cryptic internal codes (e.g. "acc_ex2_68",
+  "parentaccountname", "statuscode"). Prioritize fields with an obvious, recognizable meaning
+  (name, status, id, industry, city, dates, amounts) in the main layout; humanize their labels
+  (title case, spaces instead of underscores/camelCase). Group any remaining fields you cannot
+  confidently label under a clearly-marked secondary section (e.g. "More details") rather than
+  omitting them or blocking the whole card on them.
 - Handle empty, null, or error-shaped data gracefully with a short, friendly message instead of a
-  blank or broken card.
+  blank or broken card — but only after genuinely confirming (per the rule above) that there is no
+  usable data.
 - Never fetch network resources and never use dangerouslySetInnerHTML.
 - The component takes no props and must render without throwing.`;
 
@@ -53,7 +69,7 @@ export async function generateReactUi({
     throw new Error("OPENAI_API_KEY is not set on the server. Add it to .env.local and restart the app.");
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = process.env.OPENAI_MODEL || "gpt-4o";
   const client = new OpenAI({ apiKey });
 
   const userPrompt = [

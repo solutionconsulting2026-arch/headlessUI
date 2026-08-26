@@ -33,7 +33,7 @@ export async function routeUserMessage(
     throw new Error("OPENAI_API_KEY is not set on the server. Add it to .env.local and restart the app.");
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const model = process.env.OPENAI_MODEL || "gpt-4o";
   const client = new OpenAI({ apiKey });
   const openaiTools = mcpToolsToOpenAiTools(tools);
 
