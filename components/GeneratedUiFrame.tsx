@@ -23,8 +23,8 @@ export default function GeneratedUiFrame({ code, data }: GeneratedUiFrameProps) 
       title="AI-generated UI"
       sandbox="allow-scripts"
       srcDoc={srcDoc}
-      className="w-full rounded-lg border border-slate-200 bg-white"
-      style={{ height: "70vh" }}
+      className="w-full bg-white"
+      style={{ height: "min(60vh, 520px)" }}
     />
   );
 }

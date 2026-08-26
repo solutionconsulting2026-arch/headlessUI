@@ -23,16 +23,16 @@ export default function ResultViewer({ data }: ResultViewerProps) {
       </div>
 
       {view === "json" || !rows ? (
-        <pre className="max-h-96 overflow-auto rounded-lg bg-slate-900 text-slate-100 text-xs p-4 leading-relaxed">
+        <pre className="max-h-96 overflow-auto rounded-lg bg-ink text-white text-xs p-4 leading-relaxed">
           {safeStringify(data)}
         </pre>
       ) : (
-        <div className="overflow-auto max-h-96 rounded-lg border border-slate-200">
+        <div className="overflow-auto max-h-96 rounded-lg border border-line">
           <table className="min-w-full text-sm">
-            <thead className="bg-slate-100 sticky top-0">
+            <thead className="bg-light-grey sticky top-0">
               <tr>
                 {rows.columns.map((col) => (
-                  <th key={col} className="text-left font-semibold text-slate-600 px-3 py-2 whitespace-nowrap">
+                  <th key={col} className="text-left font-semibold text-dark-grey px-3 py-2 whitespace-nowrap">
                     {col}
                   </th>
                 ))}
@@ -40,9 +40,9 @@ export default function ResultViewer({ data }: ResultViewerProps) {
             </thead>
             <tbody>
               {rows.rows.map((row, i) => (
-                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-light-grey"}>
                   {rows.columns.map((col) => (
-                    <td key={col} className="px-3 py-2 align-top text-slate-700 whitespace-pre-wrap">
+                    <td key={col} className="px-3 py-2 align-top text-ink whitespace-pre-wrap">
                       {formatCell(row[col])}
                     </td>
                   ))}
@@ -62,7 +62,7 @@ function ToggleButton({ active, onClick, children }: { active: boolean; onClick:
       type="button"
       onClick={onClick}
       className={`text-xs font-medium px-3 py-1 rounded-full border transition ${
-        active ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-600 border-slate-300 hover:bg-slate-50"
+        active ? "bg-accent text-white border-accent" : "bg-white text-dark-grey border-line hover:bg-light-grey"
       }`}
     >
       {children}

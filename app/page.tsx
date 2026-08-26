@@ -1,220 +1,190 @@
 "use client";
 
-import { useState } from "react";
-import type { McpCallToolResult, McpTool } from "@/lib/mcp/client";
-import { extractResultData } from "@/lib/extractResultData";
-import SchemaForm from "@/components/SchemaForm";
-import ResultViewer from "@/components/ResultViewer";
-import GeneratedUiFrame from "@/components/GeneratedUiFrame";
-
-type Status = "idle" | "loading" | "error";
+import { useEffect, useRef, useState } from "react";
+import type { McpTool } from "@/lib/mcp/client";
+import { type ChatTurn, newTurnId, turnToHistoryEntry } from "@/lib/chatTypes";
+import ChatMessageBubble from "@/components/ChatMessageBubble";
+import PromptSuggestions from "@/components/PromptSuggestions";
+import ServerSettings from "@/components/ServerSettings";
 
 const DEFAULT_SERVER_URL = process.env.NEXT_PUBLIC_DEFAULT_MCP_SERVER_URL || "https://headlessmcp.vercel.app/mcp";
 
+type ConnectStatus = "idle" | "loading" | "connected" | "error";
+
 export default function Page() {
   const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL);
-  const [connectStatus, setConnectStatus] = useState<Status>("idle");
+  const [connectStatus, setConnectStatus] = useState<ConnectStatus>("idle");
   const [connectError, setConnectError] = useState<string | null>(null);
   const [tools, setTools] = useState<McpTool[]>([]);
 
-  const [selectedTool, setSelectedTool] = useState<McpTool | null>(null);
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
 
-  const [callStatus, setCallStatus] = useState<Status>("idle");
-  const [callError, setCallError] = useState<string | null>(null);
-  const [lastArgs, setLastArgs] = useState<Record<string, unknown> | null>(null);
-  const [lastResult, setLastResult] = useState<McpCallToolResult | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [instructions, setInstructions] = useState("");
-  const [generateStatus, setGenerateStatus] = useState<Status>("idle");
-  const [generateError, setGenerateError] = useState<string | null>(null);
-  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  useEffect(() => {
+    connect(serverUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  async function handleConnect(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [turns, sending]);
+
+  async function connect(url: string) {
     setConnectStatus("loading");
     setConnectError(null);
-    setTools([]);
-    setSelectedTool(null);
-    setLastResult(null);
-    setGeneratedCode(null);
     try {
       const res = await fetch("/api/mcp/tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serverUrl }),
+        body: JSON.stringify({ serverUrl: url }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
       setTools(body.tools);
-      setConnectStatus("idle");
+      setConnectStatus("connected");
     } catch (err) {
       setConnectStatus("error");
       setConnectError((err as Error).message);
     }
   }
 
-  function selectTool(tool: McpTool) {
-    setSelectedTool(tool);
-    setLastResult(null);
-    setCallError(null);
-    setGeneratedCode(null);
-    setGenerateError(null);
-    setInstructions("");
-  }
+  async function sendMessage(text: string) {
+    const message = text.trim();
+    if (!message || sending) return;
 
-  async function handleCallTool(args: Record<string, unknown>) {
-    if (!selectedTool) return;
-    setCallStatus("loading");
-    setCallError(null);
-    setGeneratedCode(null);
-    setGenerateError(null);
+    const userTurn: ChatTurn = { id: newTurnId(), role: "user", content: message };
+    const history = turns.map(turnToHistoryEntry).filter((h): h is NonNullable<typeof h> => h !== null);
+
+    setTurns((prev) => [...prev, userTurn]);
+    setInput("");
+    setSending(true);
+
     try {
-      const res = await fetch("/api/mcp/call", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serverUrl, name: selectedTool.name, arguments: args }),
+        body: JSON.stringify({ serverUrl, tools, history, message }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
-      setLastArgs(args);
-      setLastResult(body.result);
-      setCallStatus("idle");
+
+      let assistantTurn: ChatTurn;
+      if (body.kind === "text") {
+        assistantTurn = { id: newTurnId(), role: "assistant", kind: "text", content: body.content };
+      } else if (body.kind === "tool_result") {
+        assistantTurn = {
+          id: newTurnId(),
+          role: "assistant",
+          kind: "tool_result",
+          toolName: body.toolName,
+          args: body.args,
+          result: body.result,
+          code: body.code,
+          note: body.note,
+        };
+      } else {
+        assistantTurn = {
+          id: newTurnId(),
+          role: "assistant",
+          kind: "tool_error",
+          toolName: body.toolName,
+          args: body.args,
+          error: body.error,
+        };
+      }
+      setTurns((prev) => [...prev, assistantTurn]);
     } catch (err) {
-      setCallStatus("error");
-      setCallError((err as Error).message);
+      setTurns((prev) => [...prev, { id: newTurnId(), role: "assistant", kind: "error", content: (err as Error).message }]);
+    } finally {
+      setSending(false);
     }
   }
 
-  async function handleGenerateUi() {
-    if (!selectedTool || !lastResult) return;
-    setGenerateStatus("loading");
-    setGenerateError(null);
-    try {
-      const res = await fetch("/api/generate-ui", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toolName: selectedTool.name,
-          toolDescription: selectedTool.description,
-          args: lastArgs,
-          result: extractResultData(lastResult),
-          instructions,
-        }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
-      setGeneratedCode(body.code);
-      setGenerateStatus("idle");
-    } catch (err) {
-      setGenerateStatus("error");
-      setGenerateError((err as Error).message);
-    }
-  }
+  const greeting = timeGreeting();
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold text-ink">MCP UI Explorer</h1>
-        <p className="text-slate-500 mt-1">
-          Connect to any MCP server, call its tools, and let AI generate a React UI for the result — the same idea
-          behind generative UI in Claude, rendered here with the OpenAI API.
-        </p>
+    <div className="flex flex-col h-screen bg-white">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-line relative">
+        <div className="flex items-center gap-2">
+          <span className="h-5 w-1 bg-accent rounded-sm" />
+          <h1 className="text-lg font-bold text-ink">MCP UI Explorer</h1>
+        </div>
+        <ServerSettings
+          serverUrl={serverUrl}
+          onServerUrlChange={setServerUrl}
+          onReconnect={() => connect(serverUrl)}
+          status={connectStatus}
+          error={connectError}
+          toolCount={tools.length}
+        />
       </header>
 
-      <section className="bg-white rounded-2xl border border-slate-200 p-6 mb-6 shadow-sm">
-        <h2 className="text-sm font-semibold text-slate-600 mb-3">1. Connect to an MCP server</h2>
-        <form onSubmit={handleConnect} className="flex flex-col sm:flex-row gap-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-8">
+        <div className="max-w-3xl mx-auto">
+          {turns.length === 0 ? (
+            <div>
+              <h2 className="text-3xl font-bold text-ink mb-1">{greeting}</h2>
+              <p className="text-mid-grey mb-8">What would you like to do?</p>
+              {connectStatus === "connected" && <PromptSuggestions tools={tools} onPick={sendMessage} />}
+              {connectStatus === "error" && (
+                <p className="text-sm text-accent">Couldn&apos;t connect to the MCP server: {connectError}</p>
+              )}
+              {connectStatus === "loading" && <p className="text-sm text-mid-grey">Connecting to MCP server…</p>}
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {turns.map((turn) => (
+                <ChatMessageBubble key={turn.id} turn={turn} />
+              ))}
+              {sending && (
+                <div className="flex">
+                  <div className="border-l-2 border-accent pl-4">
+                    <span className="text-sm text-mid-grey">Thinking…</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-line px-6 py-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendMessage(input);
+          }}
+          className="max-w-3xl mx-auto flex items-center gap-3 rounded-full border border-line bg-light-grey px-4 py-2"
+        >
           <input
             type="text"
-            value={serverUrl}
-            onChange={(e) => setServerUrl(e.target.value)}
-            placeholder="https://headlessmcp.vercel.app/mcp"
-            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask about your data, or tell it what to do…"
+            className="flex-1 bg-transparent text-sm text-ink placeholder:text-mid-grey focus:outline-none"
           />
           <button
             type="submit"
-            disabled={connectStatus === "loading"}
-            className="inline-flex items-center justify-center rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
+            disabled={sending || !input.trim()}
+            aria-label="Send"
+            className="flex items-center justify-center h-8 w-8 rounded-full bg-accent text-white disabled:opacity-40"
           >
-            {connectStatus === "loading" ? "Connecting…" : "Connect & list tools"}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
         </form>
-        {connectError && <p className="text-sm text-red-600 mt-2">{connectError}</p>}
-        {tools.length > 0 && (
-          <p className="text-sm text-emerald-600 mt-2">
-            Connected — {tools.length} tool{tools.length === 1 ? "" : "s"} available.
-          </p>
-        )}
-      </section>
-
-      {tools.length > 0 && (
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm md:col-span-1">
-            <h2 className="text-sm font-semibold text-slate-600 mb-3">2. Pick a tool</h2>
-            <ul className="space-y-1 max-h-96 overflow-auto">
-              {tools.map((tool) => (
-                <li key={tool.name}>
-                  <button
-                    type="button"
-                    onClick={() => selectTool(tool)}
-                    className={`w-full text-left rounded-lg px-3 py-2 text-sm transition ${
-                      selectedTool?.name === tool.name ? "bg-indigo-50 text-indigo-700 font-medium" : "hover:bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <div className="font-medium">{tool.name}</div>
-                    {tool.description && <div className="text-xs text-slate-400 line-clamp-2">{tool.description}</div>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm md:col-span-2">
-            <h2 className="text-sm font-semibold text-slate-600 mb-3">3. Call it</h2>
-            {!selectedTool ? (
-              <p className="text-sm text-slate-400">Select a tool on the left to see its arguments.</p>
-            ) : (
-              <>
-                {selectedTool.description && <p className="text-sm text-slate-500 mb-4">{selectedTool.description}</p>}
-                <SchemaForm schema={selectedTool.inputSchema} onSubmit={handleCallTool} submitting={callStatus === "loading"} />
-                {callError && <p className="text-sm text-red-600 mt-3">{callError}</p>}
-              </>
-            )}
-          </div>
-        </section>
-      )}
-
-      {lastResult && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 mb-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-600 mb-3">4. Result</h2>
-          <ResultViewer data={extractResultData(lastResult)} />
-        </section>
-      )}
-
-      {lastResult && (
-        <section className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-600 mb-3">5. Generate a UI for it</h2>
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <input
-              type="text"
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Optional: describe how you want it presented (e.g. 'as a bar chart', 'compact cards')"
-              className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-            <button
-              type="button"
-              onClick={handleGenerateUi}
-              disabled={generateStatus === "loading"}
-              className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-            >
-              {generateStatus === "loading" ? "Generating…" : "Generate UI with AI"}
-            </button>
-          </div>
-          {generateError && <p className="text-sm text-red-600 mb-3">{generateError}</p>}
-          {generatedCode && <GeneratedUiFrame code={generatedCode} data={extractResultData(lastResult)} />}
-        </section>
-      )}
-    </main>
+      </div>
+    </div>
   );
+}
+
+function timeGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
