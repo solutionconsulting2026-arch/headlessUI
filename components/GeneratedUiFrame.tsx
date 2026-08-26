@@ -4,23 +4,23 @@ import { useMemo } from "react";
 
 interface GeneratedUiFrameProps {
   code: string;
-  data: unknown;
 }
 
 /**
- * Renders AI-generated React code in a sandboxed iframe. The iframe has
+ * Renders an AI-generated HTML fragment in a sandboxed iframe. The iframe has
  * "allow-scripts" only (no "allow-same-origin"), so it executes in a unique,
  * opaque origin: it cannot read this page's DOM/cookies/localStorage, submit
  * top-level navigations, or otherwise touch the parent app, no matter what
- * the generated code does. React/ReactDOM/Babel are loaded from a CDN inside
- * that isolated frame purely to transpile and run the generated JSX.
+ * the generated markup does. The fragment is plain HTML with the real data
+ * values already baked in — no framework or CDN scripts are loaded, so it
+ * renders instantly and has no external dependency.
  */
-export default function GeneratedUiFrame({ code, data }: GeneratedUiFrameProps) {
-  const srcDoc = useMemo(() => buildHtmlDocument(code, data), [code, data]);
+export default function GeneratedUiFrame({ code }: GeneratedUiFrameProps) {
+  const srcDoc = useMemo(() => buildHtmlDocument(code), [code]);
 
   return (
     <iframe
-      title="AI-generated UI"
+      title="Generated result card"
       sandbox="allow-scripts"
       srcDoc={srcDoc}
       className="w-full bg-white"
@@ -29,10 +29,7 @@ export default function GeneratedUiFrame({ code, data }: GeneratedUiFrameProps) 
   );
 }
 
-function buildHtmlDocument(code: string, data: unknown): string {
-  const dataJson = JSON.stringify(data ?? null).replace(/</g, "\\u003c");
-  const escapedCode = code.replace(/<\/script>/gi, "<\\/script>");
-
+function buildHtmlDocument(fragment: string): string {
   return `<!doctype html>
 <html>
 <head>
@@ -43,14 +40,9 @@ function buildHtmlDocument(code: string, data: unknown): string {
   body {
     margin: 0;
     padding: 16px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-    color: #0f172a;
+    font-family: Calibri, "Segoe UI", Arial, "Helvetica Neue", sans-serif;
+    color: #212121;
     background: #ffffff;
-  }
-  #root:empty::after {
-    content: "Rendering…";
-    color: #94a3b8;
-    font-size: 14px;
   }
   #error-banner {
     display: none;
@@ -64,35 +56,16 @@ function buildHtmlDocument(code: string, data: unknown): string {
     margin-bottom: 12px;
   }
 </style>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 </head>
 <body>
 <div id="error-banner"></div>
-<div id="root"></div>
-<script id="mcp-data" type="application/json">${dataJson}</script>
+${fragment}
 <script>
   window.onerror = function (message) {
     var el = document.getElementById("error-banner");
     el.style.display = "block";
-    el.textContent = "Error rendering generated UI: " + message;
+    el.textContent = "Error rendering this card: " + message;
   };
-</script>
-<script type="text/babel" data-presets="react">
-  const DATA = JSON.parse(document.getElementById("mcp-data").textContent);
-  const { useState, useEffect, useMemo, useRef, useCallback, useReducer } = React;
-
-  ${escapedCode}
-
-  try {
-    const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(React.createElement(App));
-  } catch (err) {
-    const el = document.getElementById("error-banner");
-    el.style.display = "block";
-    el.textContent = "Error rendering generated UI: " + (err && err.message ? err.message : String(err));
-  }
 </script>
 </body>
 </html>`;

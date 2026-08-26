@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateReactUi } from "@/lib/openai/generateUi";
+import { generateUiHtml } from "@/lib/openai/generateUi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "result is required" }, { status: 400 });
     }
 
-    const output = await generateReactUi({
+    const output = await generateUiHtml({
       toolName,
       toolDescription: typeof toolDescription === "string" ? toolDescription : undefined,
       args,

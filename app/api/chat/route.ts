@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { callTool, McpError, type McpTool } from "@/lib/mcp/client";
 import { validateServerUrl } from "@/lib/validateServerUrl";
 import { routeUserMessage, type RouterHistoryMessage } from "@/lib/openai/chatRouter";
-import { generateReactUi } from "@/lib/openai/generateUi";
+import { generateUiHtml } from "@/lib/openai/generateUi";
 import { extractResultData } from "@/lib/extractResultData";
 
 export const runtime = "nodejs";
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     const resultData = extractResultData(callResult);
 
-    const ui = await generateReactUi({
+    const ui = await generateUiHtml({
       toolName: outcome.name,
       toolDescription: tool?.description,
       args: outcome.args,

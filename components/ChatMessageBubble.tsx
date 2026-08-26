@@ -61,7 +61,7 @@ export default function ChatMessageBubble({ turn }: { turn: ChatTurn }) {
           <span className="text-xs font-medium text-mid-grey">Used tool: {turn.toolName}</span>
         </div>
         <div className="rounded-lg border border-line bg-white overflow-hidden">
-          <GeneratedUiFrame code={turn.code} data={turn.result} />
+          <GeneratedUiFrame code={turn.code} />
         </div>
         <RawDataToggle result={turn.result} />
       </div>
