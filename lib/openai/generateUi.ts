@@ -12,16 +12,25 @@ Rules:
   interaction genuinely needs it — most cards need none at all. For a collapsible secondary
   section, use a native <details><summary> element instead of JavaScript.
 - Style inline (style="...") or with a single scoped <style> block at the top of the fragment;
-  there is no CSS framework available. Follow this palette strictly: accent magenta #C2185B (used
-  only for the card's small header label, key numbers/ids, and icon strokes — never for body text
-  or full backgrounds), charcoal #212121 (primary text), #424242 (secondary text), #757575
-  (captions/metadata), #F5F5F5 (subtle section fills), #E0E0E0 (borders/dividers), white
-  background. Flat design only: no gradients, no box-shadows, no glows. Left-align all text.
-  Rounded corners around 8-10px on cards/pills.
+  there is no CSS framework available. Base palette: brand magenta #C2185B / dark #880E4F / light
+  #F8BBD9, charcoal #212121 (primary text), #424242 (secondary text), #757575 (captions/metadata),
+  #F5F5F5 (neutral section fills), #E0E0E0 (borders/dividers), white background. Make the card feel
+  designed and colorful, not a plain black-and-white list: give it a colored icon/initial avatar
+  (a filled circle with the entity's first letter or a simple glyph), colored status badges/pills
+  (a filled rounded chip, not just plain colored text — pick a sensible color per status family:
+  greens for active/success/approved, ambers for pending/warning, reds for inactive/failed/blocked,
+  greys for neutral/unknown/closed — small color swatches, never large blocks), and a subtle tinted
+  background (e.g. a light accent or status tint, not stark white) on the header area or key stat
+  tiles. It's fine to introduce a few extra hues this way as long as the overall page still reads
+  as one coherent, professional card — magenta stays the dominant/signature color, flat design only
+  (no gradients, no box-shadows, no glows), text stays left-aligned and on the neutral greys/
+  charcoal above (never pure color body text). Rounded corners around 8-10px on cards/pills.
 - Lead with the single most important fact (a name, an id, a status) in a larger/bolder style near
   the top, then supporting details below — this is a quick-glance card, not a dense report. Use a
   short table only for a list of several uniform rows; otherwise a key/value layout or small stat
-  tiles.
+  tiles. Size everything to fit its content compactly — the card's container auto-sizes to however
+  tall you make it, so don't pad it out with empty space, but don't force content into a cramped
+  fixed height either.
 - Real API responses are often wrapped in an envelope (e.g. a "result" array, or a container named
   after the entity) instead of being the payload itself. Look past that wrapper to the actual
   record before deciding there is nothing to show. Only render the empty/error state when, after
